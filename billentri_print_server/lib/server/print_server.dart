@@ -602,7 +602,7 @@ class PrintServer {
         }
 
         final items = jsonList
-            .map((e) => PrintItem.fromJson(e as Map<String, dynamic>))
+            .map((e) => PrintItem.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList();
 
         String tspl =
