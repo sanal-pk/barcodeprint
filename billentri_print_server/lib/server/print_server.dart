@@ -258,41 +258,29 @@ class PrintServer {
   PrintServer({this.port = 5050});
 
   static Future<String> getLocalIpAddress() async {
-    // 1. Primary: Connect socket to determine the active outbound route IP (Wi-Fi / LAN gateway)
     try {
-      final socket = await Socket.connect(
-        '8.8.8.8',
-        53,
-        timeout: const Duration(milliseconds: 1000),
+      final interfaces = await NetworkInterface.list(
+        includeLoopback: false,
+        type: InternetAddressType.IPv4,
       );
-      final ip = socket.address.address;
-      await socket.close();
-      socket.destroy();
-      if (ip != '0.0.0.0' && !ip.startsWith('127.')) {
-        return ip;
-      }
-    } catch (_) {}
 
-    // 2. Secondary: Inspect network interfaces, prioritizing Wi-Fi/Wireless and active non-virtual adapters
-    try {
-      final interfaces = await NetworkInterface.list();
-
-      // Pass A: Prioritize Wi-Fi / WLAN adapters
+      // 1. First preference: Wi-Fi / Wireless / WLAN adapter
       for (var interface in interfaces) {
         final name = interface.name.toLowerCase();
-        if (name.contains('wi-fi') || name.contains('wireless') || name.contains('wlan')) {
+        if (name.contains('wi-fi') ||
+            name.contains('wifi') ||
+            name.contains('wireless') ||
+            name.contains('wlan')) {
           for (var addr in interface.addresses) {
-            if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-              final ip = addr.address;
-              if (!ip.startsWith('169.254.') && !ip.startsWith('127.')) {
-                return ip;
-              }
+            final ip = addr.address;
+            if (!ip.startsWith('169.254.') && !ip.startsWith('127.')) {
+              return ip;
             }
           }
         }
       }
 
-      // Pass B: Non-virtual active IPv4 (skip virtual, vethernet, vmware, vbox, hyper-v, etc.)
+      // 2. Second preference: Physical Ethernet / LAN adapter (skip virtual / bridge adapters)
       for (var interface in interfaces) {
         final name = interface.name.toLowerCase();
         if (name.contains('virtual') ||
@@ -307,28 +295,35 @@ class PrintServer {
           continue;
         }
         for (var addr in interface.addresses) {
-          if (addr.type != InternetAddressType.IPv4 || addr.isLoopback) continue;
           final ip = addr.address;
           if (ip.startsWith('169.254.') || ip.startsWith('127.')) continue;
-          // Deprioritize .1 (often unconfigured host/gateway IP)
+          // Deprioritize unconfigured/gateway .1
           if (!ip.endsWith('.1')) {
             return ip;
           }
         }
       }
 
-      // Pass C: Fallback to any valid LAN IPv4
+      // 3. Third preference: Any 192.168.x.x or 10.x.x.x
       for (var interface in interfaces) {
+        final name = interface.name.toLowerCase();
+        if (name.contains('vmware') || name.contains('vbox') || name.contains('wsl')) continue;
         for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
+          final ip = addr.address;
+          if (ip.startsWith('192.168.') || ip.startsWith('10.')) {
+            return ip;
           }
         }
       }
+
+      // 4. Fallback: Any IPv4 address found
+      for (var interface in interfaces) {
+        for (var addr in interface.addresses) {
+          return addr.address;
+        }
+      }
     } catch (e) {
-      print(
-        'Warning: Could not get local IP address (network might not be ready): $e',
-      );
+      print('Warning: Could not get local IP address: $e');
     }
     return '127.0.0.1';
   }
@@ -606,19 +601,19 @@ class PrintServer {
             .toList();
 
         String tspl =
-            '${profile.sizeCmd}\n'
-            '${profile.gapCmd}\n'
-            'DENSITY ${profile.density}\n'
-            'SPEED ${profile.speed}\n'
-            'DIRECTION 1\n'
-            'REFERENCE 0,0\n';
+            '${profile.sizeCmd}\r\n'
+            '${profile.gapCmd}\r\n'
+            'DENSITY ${profile.density}\r\n'
+            'SPEED ${profile.speed}\r\n'
+            'DIRECTION 1\r\n'
+            'REFERENCE 0,0\r\n';
 
         if (profile.labelsPerRow >= 2) {
           for (int i = 0; i < items.length; i += 2) {
             final left = items[i];
             final right = (i + 1 < items.length) ? items[i + 1] : null;
 
-            tspl += '\nCLS\n';
+            tspl += 'CLS\r\n';
             tspl += generateLabelTspl(left, 0, profile);
 
             if (right != null) {
@@ -627,13 +622,13 @@ class PrintServer {
               tspl += generateLabelTspl(right, rightOffsetX, profile);
             }
 
-            tspl += 'PRINT 1\n';
+            tspl += 'PRINT 1,1\r\n';
           }
         } else {
           for (final item in items) {
-            tspl += '\nCLS\n';
+            tspl += 'CLS\r\n';
             tspl += generateLabelTspl(item, 0, profile);
-            tspl += 'PRINT 1\n';
+            tspl += 'PRINT 1,1\r\n';
           }
         }
 
@@ -723,7 +718,7 @@ class PrintServer {
         item.companyFontSize,
       );
       buf.write(
-        'TEXT $compX,$currentY,"${item.companyFont}",0,${item.companyFontSize},${item.companyFontSize},"$line"\n',
+        'TEXT $compX,$currentY,"${item.companyFont}",0,${item.companyFontSize},${item.companyFontSize},"$line"\r\n',
       );
       currentY += 15 + item.rowGap.toInt();
     }
@@ -732,7 +727,7 @@ class PrintServer {
     final nameLines = splitText(item.itemName, itemMaxChars);
     for (var line in nameLines) {
       buf.write(
-        'TEXT ${getCenteredX(line, centerX, item.itemFont, item.itemFontSize)},$currentY,"${item.itemFont}",0,${item.itemFontSize},${item.itemFontSize},"$line"\n',
+        'TEXT ${getCenteredX(line, centerX, item.itemFont, item.itemFontSize)},$currentY,"${item.itemFont}",0,${item.itemFontSize},${item.itemFontSize},"$line"\r\n',
       );
       currentY += 22 + item.rowGap.toInt();
     }
@@ -761,13 +756,13 @@ class PrintServer {
 
     currentY += 8; // Extra padding before barcode
     buf.write(
-      'BARCODE $barcodeX,$currentY,"128",$barcodeHeight,0,0,$narrow,$wide,"${item.barcode}"\n',
+      'BARCODE $barcodeX,$currentY,"128",$barcodeHeight,0,0,$narrow,$wide,"${item.barcode}"\r\n',
     );
     currentY += barcodeHeight + 10;
 
     // 4. Barcode Text
     buf.write(
-      'TEXT ${getCenteredX(item.barcode, centerX, item.barcodeTextFont, item.barcodeTextFontSize)},$currentY,"${item.barcodeTextFont}",0,${item.barcodeTextFontSize},${item.barcodeTextFontSize},"${item.barcode}"\n',
+      'TEXT ${getCenteredX(item.barcode, centerX, item.barcodeTextFont, item.barcodeTextFontSize)},$currentY,"${item.barcodeTextFont}",0,${item.barcodeTextFontSize},${item.barcodeTextFontSize},"${item.barcode}"\r\n',
     );
     currentY += 18 + item.rowGap.toInt();
 
@@ -786,10 +781,10 @@ class PrintServer {
       item.priceFontSize,
     );
     buf.write(
-      'TEXT $priceX,$currentY,"${item.priceFont}",0,${item.priceFontSize},${item.priceFontSize},"$priceStr"\n',
+      'TEXT $priceX,$currentY,"${item.priceFont}",0,${item.priceFontSize},${item.priceFontSize},"$priceStr"\r\n',
     );
     buf.write(
-      'TEXT ${priceX + 1},$currentY,"${item.priceFont}",0,${item.priceFontSize},${item.priceFontSize},"$priceStr"\n',
+      'TEXT ${priceX + 1},$currentY,"${item.priceFont}",0,${item.priceFontSize},${item.priceFontSize},"$priceStr"\r\n',
     ); // Bold effect
 
     return buf.toString();
