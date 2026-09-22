@@ -571,6 +571,40 @@ class PrintServer {
       );
     });
 
+    // Installed Windows Printers API
+    router.get('/printers', (Request request) async {
+      if (!Platform.isWindows) {
+        return Response.ok(
+          jsonEncode({'os': Platform.operatingSystem, 'printers': []}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      try {
+        final result = await Process.run('powershell', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          'Get-CimInstance Win32_Printer | Select-Object Name, ShareName, PortName, Default, WorkOffline, PrinterStatus | ConvertTo-Json',
+        ]);
+        dynamic list = [];
+        if (result.stdout.toString().trim().isNotEmpty) {
+          try {
+            list = jsonDecode(result.stdout.toString().trim());
+            if (list is Map) list = [list];
+          } catch (_) {}
+        }
+        return Response.ok(
+          jsonEncode({'success': true, 'printers': list}),
+          headers: {'content-type': 'application/json'},
+        );
+      } catch (e) {
+        return Response.internalServerError(
+          body: jsonEncode({'success': false, 'error': e.toString()}),
+          headers: {'content-type': 'application/json'},
+        );
+      }
+    });
+
     // Bulk print API
     router.post('/print-bulk', (Request request) async {
       try {
@@ -874,18 +908,26 @@ Add-Type -TypeDefinition $code -Language CSharp
 $printers = Get-CimInstance Win32_Printer
 $target = $printers | Where-Object { $_.ShareName -ieq 'barcode' } | Select-Object -First 1
 if (-not $target) {
-    $target = $printers | Where-Object { $_.Name -match '(?i)barcode|tsc|tvse|zenpert|4t520|xprinter|argox|godex|label' } | Select-Object -First 1
+    $target = $printers | Where-Object { $_.Name -match '(?i)barcode|tsc|ttp|tvse|zenpert|4t520|xprinter|argox|godex|label|pos|zebra|zdesigner|honeywell|citizen|dymo|bixolon|thermal' } | Select-Object -First 1
 }
 if (-not $target) {
     $target = $printers | Where-Object { $_.Default -eq $true } | Select-Object -First 1
 }
+if (-not $target) {
+    $target = $printers | Where-Object { $_.Name -notmatch '(?i)pdf|xps|onenote|fax|microsoft' } | Select-Object -First 1
+}
 if ($target) {
     $success = [RawPrint]::Send($target.Name, $bytes)
     if ($success) {
-        Write-Output "Printed directly to $($target.Name)"
+        Write-Output "Printed directly to $($target.Name) (Port: $($target.PortName))"
         exit 0
+    } else {
+        $err = [System.Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        Write-Error "Failed writing raw bytes to $($target.Name) (Win32 Error: $err)"
+        exit 2
     }
 }
+Write-Error "No physical printer found. Installed printers: $(($printers | ForEach-Object { $_.Name }) -join ', ')"
 exit 1
 ''';
 
