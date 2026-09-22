@@ -742,8 +742,8 @@ class PrintServer {
     final itemMaxChars = (maxContentWidth / (itemCharWidth > 0 ? itemCharWidth : 11)).floor().clamp(16, 80);
     int currentY = 15 + item.marginTop.toInt();
 
-    // 1. Company Name (up to 2 lines, small & clean without letter-spacing/blur)
-    final companyLines = splitText(item.companyName, companyMaxChars);
+    // 1. Company Name — uppercase, small font, no bold
+    final companyLines = splitText(item.companyName.toUpperCase(), companyMaxChars);
     for (var line in companyLines) {
       int compX = getCenteredX(
         line,
@@ -754,15 +754,19 @@ class PrintServer {
       buf.write(
         'TEXT $compX,$currentY,"${item.companyFont}",0,${item.companyFontSize},${item.companyFontSize},"$line"\r\n',
       );
-      currentY += 15 + item.rowGap.toInt();
+      currentY += 13 + item.rowGap.toInt();
     }
 
-    // 2. Item Name (up to 2 lines)
+    // 2. Item Name — bold (double-strike offset)
     final nameLines = splitText(item.itemName, itemMaxChars);
     for (var line in nameLines) {
+      final nx = getCenteredX(line, centerX, item.itemFont, item.itemFontSize);
       buf.write(
-        'TEXT ${getCenteredX(line, centerX, item.itemFont, item.itemFontSize)},$currentY,"${item.itemFont}",0,${item.itemFontSize},${item.itemFontSize},"$line"\r\n',
+        'TEXT $nx,$currentY,"${item.itemFont}",0,${item.itemFontSize},${item.itemFontSize},"$line"\r\n',
       );
+      buf.write(
+        'TEXT ${nx + 1},$currentY,"${item.itemFont}",0,${item.itemFontSize},${item.itemFontSize},"$line"\r\n',
+      ); // bold effect
       currentY += 22 + item.rowGap.toInt();
     }
 
@@ -794,13 +798,13 @@ class PrintServer {
     );
     currentY += barcodeHeight + 10;
 
-    // 4. Barcode Text
+    // 4. Barcode Text — no bold, single write
     buf.write(
       'TEXT ${getCenteredX(item.barcode, centerX, item.barcodeTextFont, item.barcodeTextFontSize)},$currentY,"${item.barcodeTextFont}",0,${item.barcodeTextFontSize},${item.barcodeTextFontSize},"${item.barcode}"\r\n',
     );
     currentY += 18 + item.rowGap.toInt();
 
-    // 5. Price (Font 2, Bold)
+    // 5. Price — bold (double-strike offset)
     final currency = item.currency.replaceAll('₹', 'Rs.');
     String currencyPrefix = currency.endsWith(':') ? currency : '$currency:';
     if (currency.isEmpty) currencyPrefix = '';
@@ -819,7 +823,7 @@ class PrintServer {
     );
     buf.write(
       'TEXT ${priceX + 1},$currentY,"${item.priceFont}",0,${item.priceFontSize},${item.priceFontSize},"$priceStr"\r\n',
-    ); // Bold effect
+    ); // bold effect
 
     return buf.toString();
   }

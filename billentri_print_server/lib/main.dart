@@ -43,10 +43,32 @@ void main() async {
 /// If the port is already bound (a previous instance is still running in the
 /// system tray), we skip trying to start a new server and go straight to the
 /// dashboard – the existing server is already healthy.
+Future<void> _killProcessOnPort(int port) async {
+  if (!Platform.isWindows) return;
+  try {
+    final result = await Process.run('cmd', ['/c', 'netstat -ano | findstr :$port']);
+    final lines = result.stdout.toString().split('\n');
+    final myPid = pid;
+    for (final line in lines) {
+      final parts = line.trim().split(RegExp(r'\s+'));
+      if (parts.length >= 5 && parts[1].contains(':$port') && parts[3].toUpperCase() == 'LISTENING') {
+        final processId = int.tryParse(parts[4]);
+        if (processId != null && processId != myPid) {
+          print('Terminating previous instance on port $port (PID: $processId)...');
+          await Process.run('taskkill', ['/F', '/PID', '$processId']);
+        }
+      }
+    }
+  } catch (e) {
+    print('Error checking/killing process on port $port: $e');
+  }
+}
+
 Future<void> _startServerInBackground(
   PrintServer server,
   ValueNotifier<ServerReadyState> state,
 ) async {
+  await _killProcessOnPort(server.port);
   int retryCount = 0;
   while (retryCount < 30) {
     try {
@@ -55,21 +77,13 @@ Future<void> _startServerInBackground(
       state.value = ServerReadyState.ready;
       return;
     } catch (e) {
-      // ── Port already in use ──────────────────────────────────────────────
-      // A previous instance is running in the system tray and already owns
-      // the port.  The server is healthy – just reuse it.
       if (_isAddressInUse(e)) {
-        print('Port already bound by a previous instance – reusing existing server.');
-        // Populate localIp so the dashboard shows the correct address.
-        server.localIp = await PrintServer.getLocalIpAddress();
-        state.value = ServerReadyState.ready;
-        return;
+        await _killProcessOnPort(server.port);
       }
-
       retryCount++;
       print('Failed to start print server (attempt $retryCount): $e');
       if (retryCount < 30) {
-        await Future.delayed(const Duration(seconds: 2));
+        await Future.delayed(const Duration(seconds: 1));
       }
     }
   }
