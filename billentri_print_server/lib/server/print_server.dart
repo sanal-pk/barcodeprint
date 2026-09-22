@@ -47,11 +47,11 @@ class PrintItem {
     this.columnGap = 0.0,
     this.barcodeRow = 1,
     this.decimalPlaces = 3,
-    this.companyFont = "2",
+    this.companyFont = "1",
     this.companyFontSize = 1,
-    this.itemFont = "1",
+    this.itemFont = "2",
     this.itemFontSize = 1,
-    this.barcodeTextFont = "6",
+    this.barcodeTextFont = "2",
     this.barcodeTextFontSize = 1,
     this.priceFont = "2",
     this.priceFontSize = 1,
@@ -72,11 +72,11 @@ class PrintItem {
       columnGap: (json['columnGap'] ?? 0).toDouble(),
       barcodeRow: json['barcodeRow'] ?? 1,
       decimalPlaces: json['decimalPlaces'] ?? 3,
-      companyFont: json['companyFont']?.toString() ?? "2",
+      companyFont: json['companyFont']?.toString() ?? "1",
       companyFontSize: json['companyFontSize'] ?? 1,
-      itemFont: json['itemFont']?.toString() ?? "1",
+      itemFont: json['itemFont']?.toString() ?? "2",
       itemFontSize: json['itemFontSize'] ?? 1,
-      barcodeTextFont: json['barcodeTextFont']?.toString() ?? "6",
+      barcodeTextFont: json['barcodeTextFont']?.toString() ?? "2",
       barcodeTextFontSize: json['barcodeTextFontSize'] ?? 1,
       priceFont: json['priceFont']?.toString() ?? "2",
       priceFontSize: json['priceFontSize'] ?? 1,
@@ -661,11 +661,13 @@ class PrintServer {
       120,
     );
     // Character limits scale with usable label width
-    final companyMaxChars = (maxContentWidth / 11).floor().clamp(16, 80);
-    final itemMaxChars = (maxContentWidth / 8).floor().clamp(20, 100);
+    final companyCharWidth = getCharWidth(item.companyFont, item.companyFontSize);
+    final companyMaxChars = (maxContentWidth / (companyCharWidth > 0 ? companyCharWidth : 8)).floor().clamp(16, 80);
+    final itemCharWidth = getCharWidth(item.itemFont, item.itemFontSize);
+    final itemMaxChars = (maxContentWidth / (itemCharWidth > 0 ? itemCharWidth : 11)).floor().clamp(16, 80);
     int currentY = 15 + item.marginTop.toInt();
 
-    // 1. Company Name (up to 2 lines)
+    // 1. Company Name (up to 2 lines, small & clean without letter-spacing/blur)
     final companyLines = splitText(item.companyName, companyMaxChars);
     for (var line in companyLines) {
       int compX = getCenteredX(
@@ -677,10 +679,7 @@ class PrintServer {
       buf.write(
         'TEXT $compX,$currentY,"${item.companyFont}",0,${item.companyFontSize},${item.companyFontSize},"$line"\n',
       );
-      buf.write(
-        'TEXT ${compX + 1},$currentY,"${item.companyFont}",0,${item.companyFontSize},${item.companyFontSize},"$line"\n',
-      ); // Bold effect
-      currentY += 26 + item.rowGap.toInt();
+      currentY += 15 + item.rowGap.toInt();
     }
 
     // 2. Item Name (up to 2 lines)
@@ -689,7 +688,7 @@ class PrintServer {
       buf.write(
         'TEXT ${getCenteredX(line, centerX, item.itemFont, item.itemFontSize)},$currentY,"${item.itemFont}",0,${item.itemFontSize},${item.itemFontSize},"$line"\n',
       );
-      currentY += 16 + item.rowGap.toInt();
+      currentY += 22 + item.rowGap.toInt();
     }
 
     // 3. Barcode – height & bar widths scale with label dimensions
