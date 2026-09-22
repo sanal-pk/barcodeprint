@@ -258,27 +258,73 @@ class PrintServer {
   PrintServer({this.port = 5050});
 
   static Future<String> getLocalIpAddress() async {
+    // 1. Primary: Connect socket to determine the active outbound route IP (Wi-Fi / LAN gateway)
+    try {
+      final socket = await Socket.connect(
+        '8.8.8.8',
+        53,
+        timeout: const Duration(milliseconds: 1000),
+      );
+      final ip = socket.address.address;
+      await socket.close();
+      socket.destroy();
+      if (ip != '0.0.0.0' && !ip.startsWith('127.')) {
+        return ip;
+      }
+    } catch (_) {}
+
+    // 2. Secondary: Inspect network interfaces, prioritizing Wi-Fi/Wireless and active non-virtual adapters
     try {
       final interfaces = await NetworkInterface.list();
-      String? fallback;
+
+      // Pass A: Prioritize Wi-Fi / WLAN adapters
       for (var interface in interfaces) {
-        for (var addr in interface.addresses) {
-          if (addr.type != InternetAddressType.IPv4 || addr.isLoopback) {
-            continue;
+        final name = interface.name.toLowerCase();
+        if (name.contains('wi-fi') || name.contains('wireless') || name.contains('wlan')) {
+          for (var addr in interface.addresses) {
+            if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+              final ip = addr.address;
+              if (!ip.startsWith('169.254.') && !ip.startsWith('127.')) {
+                return ip;
+              }
+            }
           }
-          final ip = addr.address;
-          final parts = ip.split('.');
-          if (parts.length != 4) continue;
-          final first = int.tryParse(parts[0]) ?? 0;
-          final second = int.tryParse(parts[1]) ?? 0;
-          // Skip Hyper-V / WSL virtual adapters (172.16.0.0 – 172.31.255.255)
-          if (first == 172 && second >= 16 && second <= 31) continue;
-          // Prefer typical LAN ranges (192.168.x.x or 10.x.x.x)
-          if (first == 192 || first == 10) return ip;
-          fallback ??= ip; // keep as fallback if no preferred range found
         }
       }
-      if (fallback != null) return fallback;
+
+      // Pass B: Non-virtual active IPv4 (skip virtual, vethernet, vmware, vbox, hyper-v, etc.)
+      for (var interface in interfaces) {
+        final name = interface.name.toLowerCase();
+        if (name.contains('virtual') ||
+            name.contains('vmware') ||
+            name.contains('vbox') ||
+            name.contains('vethernet') ||
+            name.contains('wsl') ||
+            name.contains('hyper-v') ||
+            name.contains('bluetooth') ||
+            name.contains('tap') ||
+            name.contains('npcap')) {
+          continue;
+        }
+        for (var addr in interface.addresses) {
+          if (addr.type != InternetAddressType.IPv4 || addr.isLoopback) continue;
+          final ip = addr.address;
+          if (ip.startsWith('169.254.') || ip.startsWith('127.')) continue;
+          // Deprioritize .1 (often unconfigured host/gateway IP)
+          if (!ip.endsWith('.1')) {
+            return ip;
+          }
+        }
+      }
+
+      // Pass C: Fallback to any valid LAN IPv4
+      for (var interface in interfaces) {
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+            return addr.address;
+          }
+        }
+      }
     } catch (e) {
       print(
         'Warning: Could not get local IP address (network might not be ready): $e',
@@ -769,7 +815,7 @@ class PrintServer {
   Future<Map<String, dynamic>> sendToPrinter(String tspl) async {
     if (!Platform.isWindows) {
       print("Warning: Skipping physical print because OS is not Windows.");
-      print("TSPL Generated:\\n$tspl");
+      print("TSPL Generated:\n$tspl");
       return {'exitCode': 0, 'stdout': 'Skipped (Not Windows)', 'stderr': ''};
     }
 
@@ -778,15 +824,101 @@ class PrintServer {
       final tempFile = File(
         '${tempDir.path}\\temp_label_${DateTime.now().millisecondsSinceEpoch}.tspl',
       );
-      await tempFile.writeAsString(tspl);
+      await tempFile.writeAsBytes(latin1.encode(tspl));
 
-      final result = await Process.run('cmd', [
-        '/c',
-        'copy',
-        '/b',
+      // 1. Primary: Direct Windows Spooler Raw Print via PowerShell (no sharing required)
+      const psScript = r'''
+$bytes = [System.IO.File]::ReadAllBytes($args[0])
+$code = @"
+using System;
+using System.Runtime.InteropServices;
+public class RawPrint {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    public class DOCINFOA {
+        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
+    }
+    [DllImport("winspool.Drv", EntryPoint = "OpenPrinterA", SetLastError = true, CharSet = CharSet.Ansi, ExactSpelling = true)]
+    public static extern bool OpenPrinter(string p, out IntPtr h, IntPtr d);
+    [DllImport("winspool.Drv", EntryPoint = "ClosePrinter", SetLastError = true)]
+    public static extern bool ClosePrinter(IntPtr h);
+    [DllImport("winspool.Drv", EntryPoint = "StartDocPrinterA", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern bool StartDocPrinter(IntPtr h, int l, [In, MarshalAs(UnmanagedType.LPStruct)] DOCINFOA d);
+    [DllImport("winspool.Drv", EntryPoint = "EndDocPrinter", SetLastError = true)]
+    public static extern bool EndDocPrinter(IntPtr h);
+    [DllImport("winspool.Drv", EntryPoint = "StartPagePrinter", SetLastError = true)]
+    public static extern bool StartPagePrinter(IntPtr h);
+    [DllImport("winspool.Drv", EntryPoint = "EndPagePrinter", SetLastError = true)]
+    public static extern bool EndPagePrinter(IntPtr h);
+    [DllImport("winspool.Drv", EntryPoint = "WritePrinter", SetLastError = true)]
+    public static extern bool WritePrinter(IntPtr h, IntPtr b, int c, out int w);
+    public static bool Send(string name, byte[] data) {
+        IntPtr p = Marshal.AllocCoTaskMem(data.Length);
+        Marshal.Copy(data, 0, p, data.Length);
+        IntPtr h;
+        DOCINFOA d = new DOCINFOA { pDocName = "BillEntri", pDataType = "RAW" };
+        bool ok = false;
+        if (OpenPrinter(name, out h, IntPtr.Zero)) {
+            if (StartDocPrinter(h, 1, d)) {
+                if (StartPagePrinter(h)) {
+                    int w;
+                    ok = WritePrinter(h, p, data.Length, out w);
+                    EndPagePrinter(h);
+                }
+                EndDocPrinter(h);
+            }
+            ClosePrinter(h);
+        }
+        Marshal.FreeCoTaskMem(p);
+        return ok;
+    }
+}
+"@
+Add-Type -TypeDefinition $code -Language CSharp
+$printers = Get-CimInstance Win32_Printer
+$target = $printers | Where-Object { $_.ShareName -ieq 'barcode' } | Select-Object -First 1
+if (-not $target) {
+    $target = $printers | Where-Object { $_.Name -match '(?i)barcode|tsc|tvse|zenpert|4t520|xprinter|argox|godex|label' } | Select-Object -First 1
+}
+if (-not $target) {
+    $target = $printers | Where-Object { $_.Default -eq $true } | Select-Object -First 1
+}
+if ($target) {
+    $success = [RawPrint]::Send($target.Name, $bytes)
+    if ($success) {
+        Write-Output "Printed directly to $($target.Name)"
+        exit 0
+    }
+}
+exit 1
+''';
+
+      ProcessResult result = await Process.run('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        psScript,
         tempFile.path,
-        r'\\localhost\barcode',
       ]);
+
+      if (result.exitCode != 0) {
+        // 2. Secondary fallback: try copy /b to shared printer network paths
+        final targets = [
+          r'\\127.0.0.1\barcode',
+          r'\\localhost\barcode',
+        ];
+        for (final target in targets) {
+          result = await Process.run('cmd', [
+            '/c',
+            'copy',
+            '/b',
+            tempFile.path,
+            target,
+          ]);
+          if (result.exitCode == 0) break;
+        }
+      }
 
       if (await tempFile.exists()) {
         await tempFile.delete();
