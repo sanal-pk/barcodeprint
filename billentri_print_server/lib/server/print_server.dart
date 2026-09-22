@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
@@ -50,7 +51,7 @@ class PrintItem {
     this.companyFontSize = 1,
     this.itemFont = "1",
     this.itemFontSize = 1,
-    this.barcodeTextFont = "1",
+    this.barcodeTextFont = "6",
     this.barcodeTextFontSize = 1,
     this.priceFont = "2",
     this.priceFontSize = 1,
@@ -75,12 +76,177 @@ class PrintItem {
       companyFontSize: json['companyFontSize'] ?? 1,
       itemFont: json['itemFont']?.toString() ?? "1",
       itemFontSize: json['itemFontSize'] ?? 1,
-      barcodeTextFont: json['barcodeTextFont']?.toString() ?? "1",
+      barcodeTextFont: json['barcodeTextFont']?.toString() ?? "6",
       barcodeTextFontSize: json['barcodeTextFontSize'] ?? 1,
       priceFont: json['priceFont']?.toString() ?? "2",
       priceFontSize: json['priceFontSize'] ?? 1,
     );
   }
+}
+
+// ── Printer Profiles ────────────────────────────────────────────────────────
+
+class PrinterProfile {
+  final String id;
+  final String displayName;
+  final String sizeCmd;
+  final String gapCmd;
+  final int labelsPerRow;
+  final int singleLabelWidthDots;
+  final int labelHeightDots;
+  final int density;
+  final int speed;
+
+  const PrinterProfile({
+    required this.id,
+    required this.displayName,
+    required this.sizeCmd,
+    required this.gapCmd,
+    this.labelsPerRow = 1,
+    required this.singleLabelWidthDots,
+    required this.labelHeightDots,
+    this.density = 8,
+    this.speed = 4,
+  });
+
+  static PrinterProfile? fromId(String id) {
+    try {
+      return all.firstWhere((p) => p.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static const List<PrinterProfile> all = [
+    tscTtp244Pro2Up,
+    tscTtp244Pro1Up,
+    tvseZenpert4T520_50x25_1Up,
+    tvseZenpert4T520_38x25_1Up,
+    tvseZenpert4T520_50x30_1Up,
+    tvseZenpert4T520_50x25_2Up,
+    tvseZenpert4T520_100x50_1Up,
+    argoxOs214Plus_50x25_1Up,
+    xprinterXp420b_50x25_1Up,
+    godexEz130_50x25_1Up,
+    generic_58x40_1Up,
+    generic_80x50_1Up,
+  ];
+
+  // ── TSC ──────────────────────────────────────────────────────────────────
+  static const tscTtp244Pro2Up = PrinterProfile(
+    id: 'TSC_TTP244_2UP',
+    displayName: 'TSC TTP-244 Pro (77.6×25 mm, 2-Up)',
+    sizeCmd: 'SIZE 77.6 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    labelsPerRow: 2,
+    singleLabelWidthDots: 310,
+    labelHeightDots: 200,
+  );
+
+  static const tscTtp244Pro1Up = PrinterProfile(
+    id: 'TSC_TTP244_1UP',
+    displayName: 'TSC TTP-244 Pro (38×25 mm, 1-Up)',
+    sizeCmd: 'SIZE 38 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 304,
+    labelHeightDots: 200,
+  );
+
+  // ── TVSE ZENPERT 4T520 ───────────────────────────────────────────────────
+  static const tvseZenpert4T520_50x25_1Up = PrinterProfile(
+    id: 'TVSE_4T520_50x25_1UP',
+    displayName: 'TVSE ZENPERT 4T520 (50×25 mm, 1-Up)',
+    sizeCmd: 'SIZE 50 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 400,
+    labelHeightDots: 200,
+  );
+
+  static const tvseZenpert4T520_38x25_1Up = PrinterProfile(
+    id: 'TVSE_4T520_38x25_1UP',
+    displayName: 'TVSE ZENPERT 4T520 (38×25 mm, 1-Up)',
+    sizeCmd: 'SIZE 38 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 304,
+    labelHeightDots: 200,
+  );
+
+  static const tvseZenpert4T520_50x30_1Up = PrinterProfile(
+    id: 'TVSE_4T520_50x30_1UP',
+    displayName: 'TVSE ZENPERT 4T520 (50×30 mm, 1-Up)',
+    sizeCmd: 'SIZE 50 mm,30 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 400,
+    labelHeightDots: 240,
+  );
+
+  static const tvseZenpert4T520_50x25_2Up = PrinterProfile(
+    id: 'TVSE_4T520_50x25_2UP',
+    displayName: 'TVSE ZENPERT 4T520 (50×25 mm, 2-Up)',
+    sizeCmd: 'SIZE 100 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    labelsPerRow: 2,
+    singleLabelWidthDots: 400,
+    labelHeightDots: 200,
+  );
+
+  static const tvseZenpert4T520_100x50_1Up = PrinterProfile(
+    id: 'TVSE_4T520_100x50_1UP',
+    displayName: 'TVSE ZENPERT 4T520 (100×50 mm, 1-Up)',
+    sizeCmd: 'SIZE 100 mm,50 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 800,
+    labelHeightDots: 400,
+  );
+
+  // ── Argox ─────────────────────────────────────────────────────────────────
+  static const argoxOs214Plus_50x25_1Up = PrinterProfile(
+    id: 'ARGOX_OS214_50x25_1UP',
+    displayName: 'Argox OS-214 Plus (50×25 mm, 1-Up)',
+    sizeCmd: 'SIZE 50 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 400,
+    labelHeightDots: 200,
+  );
+
+  // ── Xprinter ──────────────────────────────────────────────────────────────
+  static const xprinterXp420b_50x25_1Up = PrinterProfile(
+    id: 'XPRINTER_XP420B_50x25_1UP',
+    displayName: 'Xprinter XP-420B (50×25 mm, 1-Up)',
+    sizeCmd: 'SIZE 50 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 400,
+    labelHeightDots: 200,
+  );
+
+  // ── Godex ─────────────────────────────────────────────────────────────────
+  static const godexEz130_50x25_1Up = PrinterProfile(
+    id: 'GODEX_EZ130_50x25_1UP',
+    displayName: 'Godex EZ130 (50×25 mm, 1-Up)',
+    sizeCmd: 'SIZE 50 mm,25 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 400,
+    labelHeightDots: 200,
+  );
+
+  // ── Generic ───────────────────────────────────────────────────────────────
+  static const generic_58x40_1Up = PrinterProfile(
+    id: 'GENERIC_58x40_1UP',
+    displayName: 'Generic (58×40 mm, 1-Up)',
+    sizeCmd: 'SIZE 58 mm,40 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 464,
+    labelHeightDots: 320,
+  );
+
+  static const generic_80x50_1Up = PrinterProfile(
+    id: 'GENERIC_80x50_1UP',
+    displayName: 'Generic (80×50 mm, 1-Up)',
+    sizeCmd: 'SIZE 80 mm,50 mm',
+    gapCmd: 'GAP 3 mm,0',
+    singleLabelWidthDots: 640,
+    labelHeightDots: 400,
+  );
 }
 
 class PrintServer {
@@ -93,13 +259,26 @@ class PrintServer {
 
   static Future<String> getLocalIpAddress() async {
     try {
-      for (var interface in await NetworkInterface.list()) {
+      final interfaces = await NetworkInterface.list();
+      String? fallback;
+      for (var interface in interfaces) {
         for (var addr in interface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
+          if (addr.type != InternetAddressType.IPv4 || addr.isLoopback) {
+            continue;
           }
+          final ip = addr.address;
+          final parts = ip.split('.');
+          if (parts.length != 4) continue;
+          final first = int.tryParse(parts[0]) ?? 0;
+          final second = int.tryParse(parts[1]) ?? 0;
+          // Skip Hyper-V / WSL virtual adapters (172.16.0.0 – 172.31.255.255)
+          if (first == 172 && second >= 16 && second <= 31) continue;
+          // Prefer typical LAN ranges (192.168.x.x or 10.x.x.x)
+          if (first == 192 || first == 10) return ip;
+          fallback ??= ip; // keep as fallback if no preferred range found
         }
       }
+      if (fallback != null) return fallback;
     } catch (e) {
       print(
         'Warning: Could not get local IP address (network might not be ready): $e',
@@ -340,40 +519,76 @@ class PrintServer {
       );
     });
 
+    // Profiles API
+    router.get('/profiles', (Request request) {
+      final list = PrinterProfile.all
+          .map((p) => {'id': p.id, 'displayName': p.displayName})
+          .toList();
+      return Response.ok(
+        jsonEncode(list),
+        headers: {'content-type': 'application/json'},
+      );
+    });
+
     // Bulk print API
     router.post('/print-bulk', (Request request) async {
       try {
-        final payload = await request.readAsString();
-        final List<dynamic> jsonList = jsonDecode(payload);
+        final body = await request.readAsString();
+        final decoded = jsonDecode(body);
+
+        List<dynamic> jsonList;
+        PrinterProfile profile = PrinterProfile.tscTtp244Pro2Up;
+
+        if (decoded is List) {
+          // Backward-compatible: bare array defaults to TSC 2-up
+          jsonList = decoded;
+        } else if (decoded is Map) {
+          jsonList = (decoded['items'] as List<dynamic>?) ?? [];
+          final profileId = decoded['profile'] as String? ?? '';
+          profile =
+              PrinterProfile.fromId(profileId) ??
+              PrinterProfile.tscTtp244Pro2Up;
+        } else {
+          return Response.badRequest(
+            body: jsonEncode({'error': 'Invalid request body'}),
+            headers: {'content-type': 'application/json'},
+          );
+        }
+
         final items = jsonList
             .map((e) => PrintItem.fromJson(e as Map<String, dynamic>))
             .toList();
 
-        String tspl = '''
-SIZE 77.6 mm,25 mm
-GAP 3 mm,0
-DENSITY 8
-SPEED 4
-DIRECTION 1
-REFERENCE 0,0
-''';
+        String tspl =
+            '${profile.sizeCmd}\n'
+            '${profile.gapCmd}\n'
+            'DENSITY ${profile.density}\n'
+            'SPEED ${profile.speed}\n'
+            'DIRECTION 1\n'
+            'REFERENCE 0,0\n';
 
-        for (int i = 0; i < items.length; i += 2) {
-          final left = items[i];
-          final right = (i + 1 < items.length) ? items[i + 1] : null;
+        if (profile.labelsPerRow >= 2) {
+          for (int i = 0; i < items.length; i += 2) {
+            final left = items[i];
+            final right = (i + 1 < items.length) ? items[i + 1] : null;
 
-          tspl += '\nCLS\n';
+            tspl += '\nCLS\n';
+            tspl += generateLabelTspl(left, 0, profile);
 
-          // LEFT LABEL
-          tspl += generateLabelTspl(left, 0);
+            if (right != null) {
+              final rightOffsetX =
+                  profile.singleLabelWidthDots + right.columnGap.toInt();
+              tspl += generateLabelTspl(right, rightOffsetX, profile);
+            }
 
-          // RIGHT LABEL
-          if (right != null) {
-            final rightOffsetX = 310 + right.columnGap.toInt();
-            tspl += generateLabelTspl(right, rightOffsetX);
+            tspl += 'PRINT 1\n';
           }
-
-          tspl += 'PRINT 1\n';
+        } else {
+          for (final item in items) {
+            tspl += '\nCLS\n';
+            tspl += generateLabelTspl(item, 0, profile);
+            tspl += 'PRINT 1\n';
+          }
         }
 
         print("Printing \${items.length} labels");
@@ -419,6 +634,7 @@ REFERENCE 0,0
   // --- TSPL HELPER FUNCTIONS ---
   int getCharWidth(String fontSize, int fontSizeMultiplier) {
     int baseWidth = 8;
+    if (fontSize == "6") baseWidth = 14;
     if (fontSize == "3") baseWidth = 16;
     if (fontSize == "2") baseWidth = 11;
     return baseWidth * fontSizeMultiplier;
@@ -434,15 +650,23 @@ REFERENCE 0,0
     return (centerX - textWidth / 2).floor();
   }
 
-  String generateLabelTspl(PrintItem item, int startX) {
+  String generateLabelTspl(PrintItem item, int startX, PrinterProfile profile) {
     StringBuffer buf = StringBuffer();
-    final centerX = startX + 155 + item.marginLeft.toInt();
-    // Start a bit lower for default top padding
+    final halfWidth = profile.singleLabelWidthDots ~/ 2;
+    final centerX = startX + halfWidth + item.marginLeft.toInt();
+    final maxContentWidth = profile.singleLabelWidthDots - 30;
+    // Barcode height scales with label height (30% of label, clamped 40–120 dots)
+    final barcodeHeight = (profile.labelHeightDots * 0.30).round().clamp(
+      40,
+      120,
+    );
+    // Character limits scale with usable label width
+    final companyMaxChars = (maxContentWidth / 11).floor().clamp(16, 80);
+    final itemMaxChars = (maxContentWidth / 8).floor().clamp(20, 100);
     int currentY = 15 + item.marginTop.toInt();
 
-    // 1. Company Name (Max 2 lines to avoid overflow)
-    // Font 2 can fit roughly 26 chars in ~290 dots width
-    final companyLines = splitText(item.companyName, 26);
+    // 1. Company Name (up to 2 lines)
+    final companyLines = splitText(item.companyName, companyMaxChars);
     for (var line in companyLines) {
       int compX = getCenteredX(
         line,
@@ -459,9 +683,8 @@ REFERENCE 0,0
       currentY += 26 + item.rowGap.toInt();
     }
 
-    // 2. Item Name (Max 2 lines)
-    // Font 1 can fit roughly 36 chars in ~290 dots width
-    final nameLines = splitText(item.itemName, 36);
+    // 2. Item Name (up to 2 lines)
+    final nameLines = splitText(item.itemName, itemMaxChars);
     for (var line in nameLines) {
       buf.write(
         'TEXT ${getCenteredX(line, centerX, item.itemFont, item.itemFontSize)},$currentY,"${item.itemFont}",0,${item.itemFontSize},${item.itemFontSize},"$line"\n',
@@ -469,10 +692,7 @@ REFERENCE 0,0
       currentY += 16 + item.rowGap.toInt();
     }
 
-    // 3. Barcode (Taller & properly centered)
-    int barcodeHeight = 60; // Increased height for easier scanning
-
-    // Accurately estimate Code 128 Auto width to ensure proper centering
+    // 3. Barcode – height & bar widths scale with label dimensions
     int digitsCount = 0, otherCount = 0;
     for (int i = 0; i < item.barcode.length; i++) {
       int code = item.barcode.codeUnitAt(i);
@@ -485,8 +705,8 @@ REFERENCE 0,0
     int estimatedChars128 = (digitsCount ~/ 2) + (digitsCount % 2) + otherCount;
     int estWidthNarrow1 = 11 * (estimatedChars128 + 2) + 13;
 
-    // Use wide bars if they fit within our ~290 dot padding boundary
-    int narrow = (estWidthNarrow1 * 2 < 280) ? 2 : 1;
+    // Use wide bars if they fit within the usable content width
+    int narrow = (estWidthNarrow1 * 2 < maxContentWidth) ? 2 : 1;
     int wide = narrow == 1 ? 2 : 3;
 
     int estWidth = estWidthNarrow1 * narrow;
@@ -542,7 +762,7 @@ REFERENCE 0,0
 
     // Add ellipsis if line 2 overflows, ensuring max 2 lines
     if (line2.length > maxLength) {
-      line2 = line2.substring(0, maxLength - 2).trimRight() + "..";
+      line2 = "${line2.substring(0, maxLength - 2).trimRight()}..";
     }
     return [line1, line2];
   }

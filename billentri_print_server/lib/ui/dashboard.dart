@@ -4,16 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
-// import '../server/print_server.dart';
+import '../server/print_server.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   final int port;
   final String localIp;
 
   const DashboardScreen({super.key, required this.port, required this.localIp});
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  PrinterProfile _selectedProfile = PrinterProfile.tscTtp244Pro2Up;
+
+  @override
   Widget build(BuildContext context) {
+    final localIp = widget.localIp;
+    final port = widget.port;
     final serverUrl = 'http://$localIp:$port';
     const brandColor = Color(0xFF016F42);
 
@@ -76,7 +85,6 @@ class DashboardScreen extends StatelessWidget {
                           BoxShadow(
                             color: Colors.black.withOpacity(0.1),
                             blurRadius: 4,
-                            // inset: true,
                           ),
                         ],
                       ),
@@ -207,7 +215,49 @@ class DashboardScreen extends StatelessWidget {
 
                       const Spacer(),
                       const Divider(),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
+                      // Printer profile selector
+                      Row(
+                        children: [
+                          const Icon(Icons.tune, color: brandColor, size: 18),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Printer Profile:',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: Color(0xFF374151),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<PrinterProfile>(
+                                value: _selectedProfile,
+                                isExpanded: true,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF374151),
+                                ),
+                                items: PrinterProfile.all
+                                    .map(
+                                      (p) => DropdownMenuItem<PrinterProfile>(
+                                        value: p,
+                                        child: Text(p.displayName),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (p) {
+                                  if (p != null) {
+                                    setState(() => _selectedProfile = p);
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           const Icon(
@@ -227,46 +277,57 @@ class DashboardScreen extends StatelessWidget {
                           ),
                           ElevatedButton.icon(
                             onPressed: () async {
-                              final payload = [
-                                {
-                                  "companyName": "BillEntri",
-                                  "itemName": "Apple",
-                                  "barcode": "108011520",
-                                  "price": 100.00,
-                                  "currency": "Rs.",
-                                  "marginLeft": 15,
-                                  "marginTop": 15,
-                                  "rowGap": 3,
-                                  "columnGap": 0
-                                },
-                                {
-                                  "companyName": "BillEntri",
-                                  "itemName": "Orange",
-                                  "barcode": "115545420",
-                                  "price": 180.00,
-                                  "currency": "Rs.",
-                                  "marginLeft": 15,
-                                  "marginTop": 15,
-                                  "rowGap": 3,
-                                  "columnGap": 0
-                                }
-                              ];
-                              
+                              final payload = {
+                                'profile': _selectedProfile.id,
+                                'items': [
+                                  {
+                                    "companyName": "BillEntri",
+                                    "itemName": "Apple",
+                                    "barcode": "108011520",
+                                    "price": 100.00,
+                                    "currency": "Rs.",
+                                    "marginLeft": 15,
+                                    "marginTop": 15,
+                                    "rowGap": 3,
+                                    "columnGap": 0
+                                  },
+                                  {
+                                    "companyName": "BillEntri",
+                                    "itemName": "Orange",
+                                    "barcode": "115545420",
+                                    "price": 180.00,
+                                    "currency": "Rs.",
+                                    "marginLeft": 15,
+                                    "marginTop": 15,
+                                    "rowGap": 3,
+                                    "columnGap": 0
+                                  }
+                                ],
+                              };
+
                               try {
                                 final client = HttpClient();
-                                final request = await client.postUrl(Uri.parse('http://$localIp:$port/print-bulk'));
+                                final request = await client.postUrl(
+                                  Uri.parse('http://$localIp:$port/print-bulk'),
+                                );
                                 request.headers.set('content-type', 'application/json');
                                 request.write(jsonEncode(payload));
                                 final response = await request.close();
                                 if (response.statusCode == 200 && context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Test print sent successfully!'), backgroundColor: Colors.green),
+                                    const SnackBar(
+                                      content: Text('Test print sent successfully!'),
+                                      backgroundColor: Colors.green,
+                                    ),
                                   );
                                 }
-                              } catch(e) {
+                              } catch (e) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('Test print failed: $e'), backgroundColor: Colors.red),
+                                    SnackBar(
+                                      content: Text('Test print failed: $e'),
+                                      backgroundColor: Colors.red,
+                                    ),
                                   );
                                 }
                               }
@@ -276,7 +337,10 @@ class DashboardScreen extends StatelessWidget {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: brandColor,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
                             ),
                           ),
                         ],
